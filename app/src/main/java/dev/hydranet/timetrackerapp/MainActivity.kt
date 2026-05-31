@@ -39,6 +39,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -342,33 +343,49 @@ private fun Header(
             modifier = Modifier.padding(start = 12.dp),
             horizontalAlignment = Alignment.End
         ) {
-            TextButton(onClick = onOpenSettings, contentPadding = PaddingValues(horizontal = 8.dp)) {
-                Text("Settings", fontSize = 16.sp)
-            }
+            HeaderTextButton(text = "Settings", onClick = onOpenSettings)
         }
     }
 }
 
 @Composable
-private fun dashboardPanelColor(): Color =
+private fun HeaderTextButton(
+    text: String,
+    onClick: () -> Unit
+) {
+    TextButton(
+        onClick = onClick,
+        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
+    ) {
+        Text(
+            text = text,
+            fontSize = 16.sp,
+            lineHeight = 20.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
+}
+
+@Composable
+private fun appPanelColor(): Color =
     if (isSystemInDarkTheme()) {
-        MaterialTheme.colorScheme.surfaceContainerLow
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.075f)
     } else {
         MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
     }
 
 @Composable
-private fun dashboardInsetColor(): Color =
+private fun appInsetColor(): Color =
     if (isSystemInDarkTheme()) {
-        MaterialTheme.colorScheme.surfaceContainerHigh
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
     } else {
         MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
     }
 
 @Composable
-private fun progressTrackColor(): Color =
+private fun appTrackColor(): Color =
     if (isSystemInDarkTheme()) {
-        MaterialTheme.colorScheme.surfaceVariant
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f)
     } else {
         MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
     }
@@ -400,16 +417,14 @@ private fun SettingsScreen(
                     lineHeight = 38.sp,
                     fontWeight = FontWeight.ExtraBold
                 )
-                TextButton(onClick = onBack) {
-                    Text("Done", fontSize = 16.sp)
-                }
+                HeaderTextButton(text = "Done", onClick = onBack)
             }
         }
 
         item {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                color = appPanelColor(),
                 shape = RoundedCornerShape(22.dp)
             ) {
                 Column(
@@ -429,7 +444,12 @@ private fun SettingsScreen(
                         singleLine = true,
                         label = { Text("Web URL") },
                         placeholder = { Text(DEFAULT_WEB_BASE_URL) },
-                        isError = parsedConfig == null
+                        isError = parsedConfig == null,
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = appInsetColor(),
+                            unfocusedContainerColor = appInsetColor(),
+                            errorContainerColor = appInsetColor()
+                        )
                     )
                     Text(
                         text = parsedConfig?.apiBaseUrl ?: "Enter a valid HTTP or HTTPS URL.",
@@ -467,7 +487,7 @@ private fun ProgressSummary(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = dashboardPanelColor(),
+        color = appPanelColor(),
         shape = RoundedCornerShape(22.dp)
     ) {
         Column(
@@ -506,7 +526,7 @@ private fun ProgressSummary(
                     .height(10.dp)
                     .clip(CircleShape),
                 color = accent,
-                trackColor = progressTrackColor()
+                trackColor = appTrackColor()
             )
             Text(
                 text = "${progress.start.formatDisplayDate()} to ${progress.end.formatDisplayDate()}",
@@ -551,7 +571,7 @@ private fun MetricCell(
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        color = dashboardPanelColor(),
+        color = appPanelColor(),
         shape = RoundedCornerShape(20.dp)
     ) {
         Row(
@@ -599,7 +619,7 @@ private fun TodoPanel(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = dashboardPanelColor(),
+        color = appPanelColor(),
         shape = RoundedCornerShape(22.dp)
     ) {
         Column(
@@ -618,7 +638,7 @@ private fun TodoPanel(
                     fontSize = 25.sp
                 )
                 Surface(
-                    color = dashboardInsetColor(),
+                    color = appInsetColor(),
                     shape = CircleShape
                 ) {
                     Text(
@@ -637,7 +657,7 @@ private fun TodoPanel(
                     .height(8.dp)
                     .clip(CircleShape),
                 color = accent,
-                trackColor = progressTrackColor()
+                trackColor = appTrackColor()
             )
             HorizontalDivider()
             if (todos.isEmpty()) {
@@ -661,7 +681,7 @@ private fun TodoPanel(
 private fun TodoRow(todo: Todo) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = dashboardInsetColor(),
+        color = appInsetColor(),
         shape = RoundedCornerShape(16.dp)
     ) {
         Row(
@@ -721,24 +741,37 @@ private fun ErrorScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Text(
-            text = "Could not load Time Tracker",
-            color = MaterialTheme.colorScheme.onBackground,
-            fontWeight = FontWeight.ExtraBold,
-            fontSize = 22.sp
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = message,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(modifier = Modifier.height(18.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedButton(onClick = onConfigureServer) {
-                Text("Server")
-            }
-            Button(onClick = onRetry) {
-                Text("Retry")
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = appPanelColor(),
+            shape = RoundedCornerShape(24.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(22.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "Could not load Time Tracker",
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 22.sp,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = message,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(18.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedButton(onClick = onConfigureServer) {
+                        Text("Server")
+                    }
+                    Button(onClick = onRetry) {
+                        Text("Retry")
+                    }
+                }
             }
         }
     }
@@ -755,31 +788,42 @@ private fun ServerUnavailableScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Text(
-            text = "Time Tracker",
-            color = MaterialTheme.colorScheme.onBackground,
-            fontWeight = FontWeight.ExtraBold,
-            fontSize = 38.sp,
-            lineHeight = 42.sp
-        )
-        Spacer(modifier = Modifier.height(10.dp))
-        Text(
-            text = "Connect to your tracker server to load your progress and tasks.",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = 17.sp,
-            lineHeight = 23.sp,
-            textAlign = TextAlign.Center
-        )
-        Spacer(modifier = Modifier.height(22.dp))
-        Button(
-            onClick = onConfigureServer,
-            contentPadding = PaddingValues(horizontal = 28.dp, vertical = 16.dp)
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = appPanelColor(),
+            shape = RoundedCornerShape(28.dp)
         ) {
-            Text(
-                text = "Set server",
-                fontSize = 17.sp,
-                fontWeight = FontWeight.SemiBold
-            )
+            Column(
+                modifier = Modifier.padding(horizontal = 22.dp, vertical = 28.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "Time Tracker",
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 38.sp,
+                    lineHeight = 42.sp
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(
+                    text = "Connect to your tracker server to load your progress and tasks.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 17.sp,
+                    lineHeight = 23.sp,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(22.dp))
+                Button(
+                    onClick = onConfigureServer,
+                    contentPadding = PaddingValues(horizontal = 28.dp, vertical = 16.dp)
+                ) {
+                    Text(
+                        text = "Set server",
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
         }
     }
 }
@@ -799,47 +843,53 @@ private fun HealthUnavailableScreen(
             .padding(24.dp),
         verticalArrangement = Arrangement.Center
     ) {
-        Column(
+        Surface(
             modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            color = appPanelColor(),
+            shape = RoundedCornerShape(24.dp)
         ) {
-            Text(
-                text = "Cannot connect to the\nTime Tracker server",
-                color = MaterialTheme.colorScheme.onBackground,
-                fontWeight = FontWeight.ExtraBold,
-                fontSize = 25.sp,
-                lineHeight = 30.sp
-            )
-            Text(
-                text = "Check the server URL or try again.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 16.sp,
-                lineHeight = 22.sp
-            )
-            Button(
-                onClick = onConfigureServer,
-                modifier = Modifier.fillMaxWidth(),
-                contentPadding = PaddingValues(15.dp)
+            Column(
+                modifier = Modifier.padding(22.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Text("Configure server URL", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                OutlinedButton(
-                    onClick = onRetry,
-                    modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(13.dp)
+                Text(
+                    text = "Cannot connect to the\nTime Tracker server",
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 25.sp,
+                    lineHeight = 30.sp
+                )
+                Text(
+                    text = "Check the server URL or try again.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 16.sp,
+                    lineHeight = 22.sp
+                )
+                Button(
+                    onClick = onConfigureServer,
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(15.dp)
                 ) {
-                    Text("Retry", fontSize = 16.sp)
+                    Text("Configure server URL", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                 }
-                OutlinedButton(
-                    onClick = { showFullError = true },
-                    modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(13.dp)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text("Show error", fontSize = 16.sp)
+                    OutlinedButton(
+                        onClick = onRetry,
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(13.dp)
+                    ) {
+                        Text("Retry", fontSize = 16.sp)
+                    }
+                    OutlinedButton(
+                        onClick = { showFullError = true },
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(13.dp)
+                    ) {
+                        Text("Show error", fontSize = 16.sp)
+                    }
                 }
             }
         }

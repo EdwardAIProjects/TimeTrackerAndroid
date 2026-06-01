@@ -4,4 +4,5 @@
     <string name="widget_description">Shows Time Tracker progress, remaining time, and todos.</string>
     <string name="widget_loading">Loading Time Tracker...</string>
     <string name="widget_configure_server">Open the app to configure your server.</string>
+    <string name="widget_error_message">Tap to open the app, or refresh again.</string>
 </resources>

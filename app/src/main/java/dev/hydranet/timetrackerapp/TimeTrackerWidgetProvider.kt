@@ -76,6 +76,7 @@ private fun TimeTrackerWidgetContent() {
     val context = LocalContext.current
     val preferences = currentState<Preferences>()
     val snapshot = preferences.toWidgetSnapshot()
+    val errorMessage = preferences[WidgetStateKeys.ErrorMessage]
 
     Box(
         modifier = GlanceModifier
@@ -93,58 +94,13 @@ private fun TimeTrackerWidgetContent() {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = snapshot?.eventName?.uppercase() ?: "TIME TRACKER",
-                modifier = GlanceModifier.fillMaxWidth(),
-                style = TextStyle(
-                    color = GlanceTheme.colors.onSurface,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center
-                ),
-                maxLines = 2
-            )
-            Spacer(modifier = GlanceModifier.height(8.dp))
-            Row(verticalAlignment = Alignment.Bottom) {
-                Text(
-                    text = snapshot?.percentText ?: "--",
-                    style = TextStyle(
-                        color = GlanceTheme.colors.onSurface,
-                        fontSize = 44.sp,
-                        fontWeight = FontWeight.Bold
-                    ),
-                    maxLines = 1
+            if (snapshot == null) {
+                WidgetErrorContent(
+                    message = errorMessage ?: context.getString(R.string.widget_error_message)
                 )
-                Text(
-                    text = "%",
-                    modifier = GlanceModifier.padding(start = 3.dp, bottom = 5.dp),
-                    style = TextStyle(
-                        color = GlanceTheme.colors.onSurface,
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                )
+            } else {
+                WidgetProgressContent(snapshot)
             }
-            Spacer(modifier = GlanceModifier.height(14.dp))
-            LinearProgressIndicator(
-                progress = snapshot?.percentFraction ?: 0f,
-                modifier = GlanceModifier
-                    .fillMaxWidth()
-                    .height(8.dp),
-                color = snapshot?.accentColor?.toWidgetColorProvider() ?: GlanceTheme.colors.primary,
-                backgroundColor = GlanceTheme.colors.surfaceVariant
-            )
-            Spacer(modifier = GlanceModifier.height(12.dp))
-            Text(
-                text = snapshot?.dateRange ?: context.getString(R.string.widget_configure_server),
-                style = TextStyle(
-                    color = GlanceTheme.colors.onSurfaceVariant,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
-                    textAlign = TextAlign.Center
-                ),
-                maxLines = 2
-            )
         }
         Box(
             modifier = GlanceModifier.fillMaxSize(),
@@ -153,6 +109,89 @@ private fun TimeTrackerWidgetContent() {
             RefreshButton()
         }
     }
+}
+
+@Composable
+private fun WidgetProgressContent(snapshot: WidgetSnapshot) {
+    Text(
+        text = snapshot.eventName.uppercase(),
+        modifier = GlanceModifier.fillMaxWidth(),
+        style = TextStyle(
+            color = GlanceTheme.colors.onSurface,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center
+        ),
+        maxLines = 2
+    )
+    Spacer(modifier = GlanceModifier.height(8.dp))
+    Row(verticalAlignment = Alignment.Bottom) {
+        Text(
+            text = snapshot.percentText,
+            style = TextStyle(
+                color = GlanceTheme.colors.onSurface,
+                fontSize = 44.sp,
+                fontWeight = FontWeight.Bold
+            ),
+            maxLines = 1
+        )
+        Text(
+            text = "%",
+            modifier = GlanceModifier.padding(start = 3.dp, bottom = 5.dp),
+            style = TextStyle(
+                color = GlanceTheme.colors.onSurface,
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold
+            )
+        )
+    }
+    Spacer(modifier = GlanceModifier.height(14.dp))
+    LinearProgressIndicator(
+        progress = snapshot.percentFraction,
+        modifier = GlanceModifier
+            .fillMaxWidth()
+            .height(8.dp),
+        color = snapshot.accentColor.toWidgetColorProvider() ?: GlanceTheme.colors.primary,
+        backgroundColor = GlanceTheme.colors.surfaceVariant
+    )
+    Spacer(modifier = GlanceModifier.height(12.dp))
+    Text(
+        text = snapshot.dateRange,
+        style = TextStyle(
+            color = GlanceTheme.colors.onSurfaceVariant,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            textAlign = TextAlign.Center
+        ),
+        maxLines = 2
+    )
+}
+
+@Composable
+private fun WidgetErrorContent(message: String) {
+    Text(
+        text = "Cannot load tracker",
+        modifier = GlanceModifier.fillMaxWidth(),
+        style = TextStyle(
+            color = GlanceTheme.colors.onSurface,
+            fontSize = 23.sp,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center
+        ),
+        maxLines = 2
+    )
+    Spacer(modifier = GlanceModifier.height(8.dp))
+    Text(
+        text = message,
+        modifier = GlanceModifier.fillMaxWidth(),
+        style = TextStyle(
+            color = GlanceTheme.colors.onSurfaceVariant,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            textAlign = TextAlign.Center
+        ),
+        maxLines = 2
+    )
 }
 
 @Composable
@@ -195,19 +234,46 @@ class RefreshTimeTrackerWidgetAction : ActionCallback {
 }
 
 private suspend fun refreshWidgetState(context: Context, glanceId: GlanceId) {
-    val snapshot = runCatching { fetchWidgetSnapshot(context) }.getOrNull()
+    val result = runCatching { fetchWidgetSnapshot(context) }
     updateAppWidgetState(context, glanceId) { preferences ->
-        if (snapshot == null) {
-            preferences[WidgetStateKeys.HasData] = false
-        } else {
-            preferences[WidgetStateKeys.HasData] = true
-            preferences[WidgetStateKeys.EventName] = snapshot.eventName
-            preferences[WidgetStateKeys.PercentText] = snapshot.percentText
-            preferences[WidgetStateKeys.PercentFraction] = snapshot.percentFraction
-            preferences[WidgetStateKeys.AccentColor] = snapshot.accentColor
-            preferences[WidgetStateKeys.DateRange] = snapshot.dateRange
-        }
+        result.fold(
+            onSuccess = { snapshot ->
+                preferences[WidgetStateKeys.HasData] = true
+                preferences[WidgetStateKeys.EventName] = snapshot.eventName
+                preferences[WidgetStateKeys.PercentText] = snapshot.percentText
+                preferences[WidgetStateKeys.PercentFraction] = snapshot.percentFraction
+                preferences[WidgetStateKeys.AccentColor] = snapshot.accentColor
+                preferences[WidgetStateKeys.DateRange] = snapshot.dateRange
+                preferences.remove(WidgetStateKeys.ErrorMessage)
+            },
+            onFailure = { throwable ->
+                preferences[WidgetStateKeys.HasData] = false
+                preferences[WidgetStateKeys.ErrorMessage] = throwable.toWidgetErrorMessage()
+            }
+        )
     }
+}
+
+private fun Throwable.toWidgetErrorMessage(): String =
+    when {
+        message?.contains("health", ignoreCase = true) == true -> {
+            "Check the server URL, then tap refresh."
+        }
+        else -> "Tap to open the app, or refresh again."
+    }
+
+private fun Preferences.toWidgetSnapshot(): WidgetSnapshot? {
+    if (this[WidgetStateKeys.HasData] != true) {
+        return null
+    }
+
+    return WidgetSnapshot(
+        eventName = this[WidgetStateKeys.EventName] ?: return null,
+        percentText = this[WidgetStateKeys.PercentText] ?: return null,
+        percentFraction = this[WidgetStateKeys.PercentFraction] ?: return null,
+        accentColor = this[WidgetStateKeys.AccentColor] ?: return null,
+        dateRange = this[WidgetStateKeys.DateRange] ?: return null
+    )
 }
 
 private suspend fun fetchWidgetSnapshot(context: Context): WidgetSnapshot {
@@ -226,20 +292,6 @@ private suspend fun fetchWidgetSnapshot(context: Context): WidgetSnapshot {
     )
 }
 
-private fun Preferences.toWidgetSnapshot(): WidgetSnapshot? {
-    if (this[WidgetStateKeys.HasData] != true) {
-        return null
-    }
-
-    return WidgetSnapshot(
-        eventName = this[WidgetStateKeys.EventName] ?: return null,
-        percentText = this[WidgetStateKeys.PercentText] ?: return null,
-        percentFraction = this[WidgetStateKeys.PercentFraction] ?: return null,
-        accentColor = this[WidgetStateKeys.AccentColor] ?: return null,
-        dateRange = this[WidgetStateKeys.DateRange] ?: return null
-    )
-}
-
 private data class WidgetSnapshot(
     val eventName: String,
     val percentText: String,
@@ -255,6 +307,7 @@ private object WidgetStateKeys {
     val PercentFraction = floatPreferencesKey("percent_fraction")
     val AccentColor = stringPreferencesKey("accent_color")
     val DateRange = stringPreferencesKey("date_range")
+    val ErrorMessage = stringPreferencesKey("error_message")
 }
 
 private fun String.toWidgetColorProvider(): ColorProvider? =

@@ -1,6 +1,7 @@
 package dev.hydranet.timetrackerapp
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -36,6 +37,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -110,6 +112,9 @@ private fun TimeTrackerApp() {
     var serverUrl by remember {
         mutableStateOf(preferences.getString(SERVER_URL_KEY, DEFAULT_WEB_BASE_URL) ?: DEFAULT_WEB_BASE_URL)
     }
+    var metricSettings by remember {
+        mutableStateOf(preferences.loadMetricSettings())
+    }
     val hasBootedBefore = remember {
         preferences.getBoolean(HAS_BOOTED_KEY, false)
     }
@@ -159,6 +164,7 @@ private fun TimeTrackerApp() {
             if (isSettingsOpen) {
                 SettingsScreen(
                     serverUrl = serverConfig.webBaseUrl,
+                    metricSettings = metricSettings,
                     onBack = { isSettingsOpen = false },
                     onSave = { nextUrl ->
                         val normalizedUrl = nextUrl.toServerConfig().webBaseUrl
@@ -166,6 +172,10 @@ private fun TimeTrackerApp() {
                         serverUrl = normalizedUrl
                         refreshTimeTrackerWidgets(context.applicationContext)
                         isSettingsOpen = false
+                    },
+                    onMetricSettingChange = { option, enabled ->
+                        metricSettings = metricSettings.with(option, enabled)
+                        preferences.edit().putBoolean(option.preferenceKey, enabled).apply()
                     }
                 )
             } else {
@@ -190,6 +200,7 @@ private fun TimeTrackerApp() {
                     is TrackerUiState.Ready -> TrackerDashboard(
                         tracker = state.tracker,
                         webBaseUrl = serverConfig.webBaseUrl,
+                        metricSettings = metricSettings,
                         isRefreshing = isRefreshing,
                         onOpenSettings = { isSettingsOpen = true },
                         onRefresh = { loadKey++ }
@@ -205,6 +216,7 @@ private fun TimeTrackerApp() {
 private fun TrackerDashboard(
     tracker: TrackerState,
     webBaseUrl: String,
+    metricSettings: MetricSettings,
     isRefreshing: Boolean,
     onOpenSettings: () -> Unit,
     onRefresh: () -> Unit
@@ -254,7 +266,10 @@ private fun TrackerDashboard(
             }
 
             item {
-                MetricGrid(progress = progress)
+                MetricGrid(
+                    progress = progress,
+                    metricSettings = metricSettings
+                )
             }
 
             item {
@@ -394,8 +409,10 @@ private fun appTrackColor(): Color =
 @Composable
 private fun SettingsScreen(
     serverUrl: String,
+    metricSettings: MetricSettings,
     onBack: () -> Unit,
-    onSave: (String) -> Unit
+    onSave: (String) -> Unit,
+    onMetricSettingChange: (MetricOption, Boolean) -> Unit
 ) {
     var draftUrl by remember(serverUrl) { mutableStateOf(serverUrl) }
     val parsedConfig = remember(draftUrl) { draftUrl.toServerConfigOrNull() }
@@ -477,6 +494,63 @@ private fun SettingsScreen(
                 }
             }
         }
+
+        item {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = appPanelColor(),
+                shape = RoundedCornerShape(22.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "Metrics",
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    MetricOption.entries.forEach { option ->
+                        MetricToggleRow(
+                            option = option,
+                            checked = metricSettings.isEnabled(option),
+                            onCheckedChange = { onMetricSettingChange(option, it) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MetricToggleRow(
+    option: MetricOption,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = appInsetColor(),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 14.dp, top = 6.dp, end = 10.dp, bottom = 6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = option.label,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Switch(
+                checked = checked,
+                onCheckedChange = onCheckedChange
+            )
+        }
     }
 }
 
@@ -540,26 +614,41 @@ private fun ProgressSummary(
 }
 
 @Composable
-private fun MetricGrid(progress: Progress) {
+private fun MetricGrid(
+    progress: Progress,
+    metricSettings: MetricSettings
+) {
+    val metrics = MetricOption.entries.filter { metricSettings.isEnabled(it) }
+
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        MetricCell(
-            value = progress.daysLeft.toString(),
-            total = progress.totalDays.toString(),
-            label = "Days left"
-        )
-        MetricCell(
-            value = progress.weeksLeft.oneDecimalString(),
-            total = progress.totalWeeks.oneDecimalString(),
-            label = "Weeks left"
-        )
-        MetricCell(
-            value = progress.elapsedDays.toString(),
-            total = progress.totalDays.toString(),
-            label = "Days done"
-        )
+        if (metrics.isEmpty()) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = appPanelColor(),
+                shape = RoundedCornerShape(20.dp)
+            ) {
+                Text(
+                    text = "No metrics selected",
+                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 22.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 17.sp
+                )
+            }
+        } else {
+            metrics.forEach { option ->
+                val value = option.value(progress)
+                val total = option.total(progress)
+                MetricCell(
+                    value = value,
+                    total = total,
+                    label = option.label
+                )
+            }
+        }
     }
 }
 
@@ -1097,14 +1186,22 @@ internal fun EventSummary.progressAt(now: Instant): Progress {
     val totalDays = ChronoUnit.DAYS.between(startDate, endExclusive).toInt().coerceAtLeast(1)
     val elapsedDays = ChronoUnit.DAYS.between(startDate, today).toInt().coerceIn(0, totalDays)
     val daysLeft = kotlin.math.ceil(remainingMillis.toDouble() / MILLIS_PER_DAY).toInt()
+    val totalHours = (totalDays * 24).coerceAtLeast(1)
+    val elapsedHours = (elapsedMillis.toDouble() / MILLIS_PER_HOUR).toInt().coerceIn(0, totalHours)
+    val hoursLeft = kotlin.math.ceil(remainingMillis.toDouble() / MILLIS_PER_HOUR).toInt()
+        .coerceIn(0, totalHours)
 
     return Progress(
         start = startDate,
         end = endDate,
+        totalHours = totalHours,
+        elapsedHours = elapsedHours,
+        hoursLeft = hoursLeft,
         totalDays = totalDays,
         totalWeeks = totalDays.toDouble() / 7.0,
         elapsedDays = elapsedDays,
         daysLeft = daysLeft,
+        weeksDone = elapsedDays.toDouble() / 7.0,
         weeksLeft = daysLeft.toDouble() / 7.0,
         percent = (elapsedMillis.toDouble() / totalMillis.toDouble()) * 100.0
     )
@@ -1190,17 +1287,100 @@ internal data class Todo(
 internal data class Progress(
     val start: LocalDate,
     val end: LocalDate,
+    val totalHours: Int,
+    val elapsedHours: Int,
+    val hoursLeft: Int,
     val totalDays: Int,
     val totalWeeks: Double,
     val elapsedDays: Int,
     val daysLeft: Int,
+    val weeksDone: Double,
     val weeksLeft: Double,
     val percent: Double
 ) {
     val percentFraction: Float = (percent / 100.0).toFloat().coerceIn(0f, 1f)
 }
 
+private enum class MetricOption(
+    val preferenceKey: String,
+    val label: String,
+    val defaultEnabled: Boolean
+) {
+    HoursLeft(
+        preferenceKey = "metric_hours_left",
+        label = "Hours left",
+        defaultEnabled = false
+    ),
+    HoursDone(
+        preferenceKey = "metric_hours_done",
+        label = "Hours done",
+        defaultEnabled = false
+    ),
+    DaysLeft(
+        preferenceKey = "metric_days_left",
+        label = "Days left",
+        defaultEnabled = true
+    ),
+    DaysDone(
+        preferenceKey = "metric_days_done",
+        label = "Days done",
+        defaultEnabled = true
+    ),
+    WeeksLeft(
+        preferenceKey = "metric_weeks_left",
+        label = "Weeks left",
+        defaultEnabled = true
+    ),
+    WeeksDone(
+        preferenceKey = "metric_weeks_done",
+        label = "Weeks done",
+        defaultEnabled = false
+    );
+
+    fun value(progress: Progress): String =
+        when (this) {
+            HoursLeft -> progress.hoursLeft.toString()
+            HoursDone -> progress.elapsedHours.toString()
+            DaysLeft -> progress.daysLeft.toString()
+            DaysDone -> progress.elapsedDays.toString()
+            WeeksLeft -> progress.weeksLeft.oneDecimalString()
+            WeeksDone -> progress.weeksDone.oneDecimalString()
+        }
+
+    fun total(progress: Progress): String =
+        when (this) {
+            HoursLeft, HoursDone -> progress.totalHours.toString()
+            DaysLeft, DaysDone -> progress.totalDays.toString()
+            WeeksLeft, WeeksDone -> progress.totalWeeks.oneDecimalString()
+        }
+}
+
+private data class MetricSettings(
+    private val enabledMetrics: Map<MetricOption, Boolean>
+) {
+    fun isEnabled(option: MetricOption): Boolean =
+        enabledMetrics[option] ?: option.defaultEnabled
+
+    fun with(option: MetricOption, enabled: Boolean): MetricSettings =
+        copy(enabledMetrics = enabledMetrics + (option to enabled))
+
+    companion object {
+        fun default(): MetricSettings =
+            MetricSettings(
+                enabledMetrics = MetricOption.entries.associateWith { it.defaultEnabled }
+            )
+    }
+}
+
+private fun SharedPreferences.loadMetricSettings(): MetricSettings =
+    MetricSettings(
+        enabledMetrics = MetricOption.entries.associateWith { option ->
+            getBoolean(option.preferenceKey, option.defaultEnabled)
+        }
+    )
+
 private const val MILLIS_PER_DAY = 1000.0 * 60.0 * 60.0 * 24.0
+private const val MILLIS_PER_HOUR = 1000.0 * 60.0 * 60.0
 private const val ERROR_BODY_PREVIEW_LIMIT = 6_000
 
 private val percentFormatter: NumberFormat = NumberFormat.getNumberInstance().apply {
@@ -1232,6 +1412,7 @@ private fun TrackerDashboardPreview() {
                 )
             ),
             webBaseUrl = DEFAULT_WEB_BASE_URL,
+            metricSettings = MetricSettings.default(),
             isRefreshing = false,
             onOpenSettings = {},
             onRefresh = {}

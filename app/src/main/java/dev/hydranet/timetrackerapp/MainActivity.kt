@@ -503,7 +503,7 @@ private fun SettingsScreen(
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Text(
                         text = "Metrics",
@@ -530,27 +530,23 @@ private fun MetricToggleRow(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit
 ) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = appInsetColor(),
-        shape = RoundedCornerShape(16.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 4.dp, top = 0.dp, end = 2.dp, bottom = 0.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier.padding(start = 14.dp, top = 6.dp, end = 10.dp, bottom = 6.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = option.label,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-            Switch(
-                checked = checked,
-                onCheckedChange = onCheckedChange
-            )
-        }
+        Text(
+            text = option.label,
+            color = MaterialTheme.colorScheme.onSurface,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange
+        )
     }
 }
 
@@ -768,38 +764,34 @@ private fun TodoPanel(
 
 @Composable
 private fun TodoRow(todo: Todo) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = appInsetColor(),
-        shape = RoundedCornerShape(16.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Checkbox(
-                checked = todo.done,
-                onCheckedChange = null,
-                modifier = Modifier.size(40.dp)
-            )
-            Text(
-                text = todo.title,
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(start = 8.dp),
-                color = if (todo.done) {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                } else {
-                    MaterialTheme.colorScheme.onSurface
-                },
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 19.sp,
-                lineHeight = 23.sp,
-                textDecoration = if (todo.done) TextDecoration.LineThrough else null,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
+        Checkbox(
+            checked = todo.done,
+            onCheckedChange = null,
+            modifier = Modifier.size(40.dp)
+        )
+        Text(
+            text = todo.title,
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 8.dp),
+            color = if (todo.done) {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            },
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 19.sp,
+            lineHeight = 23.sp,
+            textDecoration = if (todo.done) TextDecoration.LineThrough else null,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 

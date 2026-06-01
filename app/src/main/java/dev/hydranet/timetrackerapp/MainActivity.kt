@@ -91,6 +91,8 @@ internal const val DEFAULT_WEB_BASE_URL = "https://example.com"
 internal const val SETTINGS_NAME = "time_tracker_settings"
 internal const val SERVER_URL_KEY = "server_url"
 private const val HAS_BOOTED_KEY = "has_booted"
+private const val AUTO_REFRESH_KEY = "auto_refresh"
+private const val AUTO_REFRESH_INTERVAL_MS = 60_000L
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -117,6 +119,9 @@ private fun TimeTrackerApp() {
     }
     var metricSettings by remember {
         mutableStateOf(preferences.loadMetricSettings())
+    }
+    var autoRefreshEnabled by remember {
+        mutableStateOf(preferences.getBoolean(AUTO_REFRESH_KEY, false))
     }
     val hasBootedBefore = remember {
         preferences.getBoolean(HAS_BOOTED_KEY, false)
@@ -157,6 +162,16 @@ private fun TimeTrackerApp() {
         isRefreshing = false
     }
 
+    val isReady = uiState is TrackerUiState.Ready
+    LaunchedEffect(autoRefreshEnabled, isReady) {
+        if (autoRefreshEnabled && isReady) {
+            while (true) {
+                delay(AUTO_REFRESH_INTERVAL_MS)
+                loadKey++
+            }
+        }
+    }
+
     Scaffold { innerPadding ->
         Surface(
             modifier = Modifier
@@ -168,6 +183,11 @@ private fun TimeTrackerApp() {
                 SettingsScreen(
                     serverUrl = serverConfig.webBaseUrl,
                     metricSettings = metricSettings,
+                    autoRefreshEnabled = autoRefreshEnabled,
+                    onAutoRefreshChange = { enabled ->
+                        autoRefreshEnabled = enabled
+                        preferences.edit().putBoolean(AUTO_REFRESH_KEY, enabled).apply()
+                    },
                     onSave = { nextUrl ->
                         val normalizedUrl = nextUrl.toServerConfig().webBaseUrl
                         preferences.edit().putString(SERVER_URL_KEY, normalizedUrl).apply()
@@ -420,6 +440,8 @@ private fun appTrackColor(): Color =
 private fun SettingsScreen(
     serverUrl: String,
     metricSettings: MetricSettings,
+    autoRefreshEnabled: Boolean,
+    onAutoRefreshChange: (Boolean) -> Unit,
     onSave: (String) -> Unit,
     onMetricSettingChange: (MetricOption, Boolean) -> Unit
 ) {
@@ -507,6 +529,33 @@ private fun SettingsScreen(
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Text(
+                        text = "General",
+                        modifier = Modifier.padding(bottom = 12.dp),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    SettingToggleRow(
+                        label = "Auto-refresh",
+                        description = "Reload stats from the server every minute.",
+                        checked = autoRefreshEnabled,
+                        onCheckedChange = onAutoRefreshChange
+                    )
+                }
+            }
+        }
+
+        item {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = appPanelColor(),
+                shape = RoundedCornerShape(22.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
                         text = "Metrics",
                         modifier = Modifier.padding(bottom = 12.dp),
                         color = MaterialTheme.colorScheme.onSurface,
@@ -547,6 +596,50 @@ private fun MetricToggleRow(
             fontSize = 16.sp,
             fontWeight = FontWeight.SemiBold
         )
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange
+        )
+    }
+}
+
+@Composable
+private fun SettingToggleRow(
+    label: String,
+    description: String?,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable { onCheckedChange(!checked) }
+            .padding(start = 4.dp, top = 4.dp, end = 2.dp, bottom = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(end = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Text(
+                text = label,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            if (description != null) {
+                Text(
+                    text = description,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    fontSize = 13.sp,
+                    lineHeight = 17.sp
+                )
+            }
+        }
         Switch(
             checked = checked,
             onCheckedChange = onCheckedChange

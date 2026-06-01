@@ -82,9 +82,9 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
-private const val DEFAULT_WEB_BASE_URL = "https://example.com"
-private const val SETTINGS_NAME = "time_tracker_settings"
-private const val SERVER_URL_KEY = "server_url"
+internal const val DEFAULT_WEB_BASE_URL = "https://example.com"
+internal const val SETTINGS_NAME = "time_tracker_settings"
+internal const val SERVER_URL_KEY = "server_url"
 private const val HAS_BOOTED_KEY = "has_booted"
 
 class MainActivity : ComponentActivity() {
@@ -164,6 +164,7 @@ private fun TimeTrackerApp() {
                         val normalizedUrl = nextUrl.toServerConfig().webBaseUrl
                         preferences.edit().putString(SERVER_URL_KEY, normalizedUrl).apply()
                         serverUrl = normalizedUrl
+                        refreshTimeTrackerWidgets(context.applicationContext)
                         isSettingsOpen = false
                     }
                 )
@@ -925,7 +926,7 @@ private fun HealthUnavailableScreen(
     }
 }
 
-private suspend fun fetchTrackerState(apiBaseUrl: String): TrackerState = withContext(Dispatchers.IO) {
+internal suspend fun fetchTrackerState(apiBaseUrl: String): TrackerState = withContext(Dispatchers.IO) {
     checkHealth("$apiBaseUrl/health")
     val events = fetchEvents("$apiBaseUrl/events")
     val todos = fetchTodos("$apiBaseUrl/todos")
@@ -1018,7 +1019,7 @@ private fun HttpURLConnection.readBody(): String {
     return stream.bufferedReader().use { it.readText() }
 }
 
-private fun EventSummary.progressAt(now: Instant): Progress {
+internal fun EventSummary.progressAt(now: Instant): Progress {
     val zone = ZoneId.systemDefault()
     val startInstant = startDate.atStartOfDay(zone).toInstant()
     val endExclusive = endDate.plusDays(1)
@@ -1046,17 +1047,17 @@ private fun EventSummary.progressAt(now: Instant): Progress {
 private fun String.toLocalDateOrDefault(): LocalDate =
     runCatching { LocalDate.parse(this) }.getOrDefault(LocalDate.of(2026, 6, 1))
 
-private fun LocalDate.formatDisplayDate(): String =
+internal fun LocalDate.formatDisplayDate(): String =
     format(DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.getDefault())).uppercase(Locale.getDefault())
 
-private fun Double.percentString(): String = percentFormatter.format(this)
+internal fun Double.percentString(): String = percentFormatter.format(this)
 
-private fun Double.oneDecimalString(): String = oneDecimalFormatter.format(this)
+internal fun Double.oneDecimalString(): String = oneDecimalFormatter.format(this)
 
 private fun String.toComposeColor(fallback: Color): Color =
     runCatching { Color(android.graphics.Color.parseColor(this)) }.getOrDefault(fallback)
 
-private fun String.toServerConfig(): ServerConfig =
+internal fun String.toServerConfig(): ServerConfig =
     toServerConfigOrNull() ?: DEFAULT_WEB_BASE_URL.toServerConfigOrNull() ?: ServerConfig(
         webBaseUrl = DEFAULT_WEB_BASE_URL,
         apiBaseUrl = "$DEFAULT_WEB_BASE_URL/api"
@@ -1096,17 +1097,17 @@ private class HealthCheckException(
     cause: Throwable? = null
 ) : IOException(message, cause)
 
-private data class TrackerState(
+internal data class TrackerState(
     val event: EventSummary,
     val todos: List<Todo>
 )
 
-private data class ServerConfig(
+internal data class ServerConfig(
     val webBaseUrl: String,
     val apiBaseUrl: String
 )
 
-private data class EventSummary(
+internal data class EventSummary(
     val id: String,
     val name: String,
     val accentColor: String,
@@ -1114,13 +1115,13 @@ private data class EventSummary(
     val endDate: LocalDate
 )
 
-private data class Todo(
+internal data class Todo(
     val id: String,
     val title: String,
     val done: Boolean
 )
 
-private data class Progress(
+internal data class Progress(
     val start: LocalDate,
     val end: LocalDate,
     val totalDays: Int,

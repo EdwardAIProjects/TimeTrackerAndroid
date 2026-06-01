@@ -3,9 +3,13 @@ package dev.hydranet.timetrackerapp
 import android.content.Context
 import android.content.SharedPreferences
 import android.os.Bundle
+import android.Manifest
+import android.content.pm.PackageManager
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.rememberScrollState
@@ -44,6 +48,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.TimePicker
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -61,6 +67,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
+import androidx.core.content.ContextCompat
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -77,6 +84,7 @@ import java.text.NumberFormat
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
@@ -122,6 +130,33 @@ private fun TimeTrackerApp() {
     }
     var autoRefreshEnabled by remember {
         mutableStateOf(preferences.getBoolean(AUTO_REFRESH_KEY, false))
+    }
+    var reminderEnabled by remember {
+        mutableStateOf(preferences.getBoolean(DAILY_REMINDER_ENABLED_KEY, false))
+    }
+    var reminderHour by remember {
+        mutableIntStateOf(preferences.getInt(DAILY_REMINDER_HOUR_KEY, DEFAULT_REMINDER_HOUR))
+    }
+    var reminderMinute by remember {
+        mutableIntStateOf(preferences.getInt(DAILY_REMINDER_MINUTE_KEY, DEFAULT_REMINDER_MINUTE))
+    }
+    var notificationsBlocked by remember { mutableStateOf(false) }
+
+    fun enableReminder() {
+        reminderEnabled = true
+        notificationsBlocked = false
+        preferences.edit().putBoolean(DAILY_REMINDER_ENABLED_KEY, true).apply()
+        DailyReminder.schedule(context, reminderHour, reminderMinute)
+    }
+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            enableReminder()
+        } else {
+            notificationsBlocked = true
+        }
     }
     val hasBootedBefore = remember {
         preferences.getBoolean(HAS_BOOTED_KEY, false)
@@ -187,6 +222,39 @@ private fun TimeTrackerApp() {
                     onAutoRefreshChange = { enabled ->
                         autoRefreshEnabled = enabled
                         preferences.edit().putBoolean(AUTO_REFRESH_KEY, enabled).apply()
+                    },
+                    reminderEnabled = reminderEnabled,
+                    reminderHour = reminderHour,
+                    reminderMinute = reminderMinute,
+                    notificationsBlocked = notificationsBlocked,
+                    onReminderEnabledChange = { enabled ->
+                        if (enabled) {
+                            val granted = ContextCompat.checkSelfPermission(
+                                context,
+                                Manifest.permission.POST_NOTIFICATIONS
+                            ) == PackageManager.PERMISSION_GRANTED
+                            if (granted) {
+                                enableReminder()
+                            } else {
+                                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            }
+                        } else {
+                            reminderEnabled = false
+                            notificationsBlocked = false
+                            preferences.edit().putBoolean(DAILY_REMINDER_ENABLED_KEY, false).apply()
+                            DailyReminder.cancel(context)
+                        }
+                    },
+                    onReminderTimeChange = { hour, minute ->
+                        reminderHour = hour
+                        reminderMinute = minute
+                        preferences.edit()
+                            .putInt(DAILY_REMINDER_HOUR_KEY, hour)
+                            .putInt(DAILY_REMINDER_MINUTE_KEY, minute)
+                            .apply()
+                        if (reminderEnabled) {
+                            DailyReminder.schedule(context, hour, minute)
+                        }
                     },
                     onSave = { nextUrl ->
                         val normalizedUrl = nextUrl.toServerConfig().webBaseUrl
@@ -442,6 +510,12 @@ private fun SettingsScreen(
     metricSettings: MetricSettings,
     autoRefreshEnabled: Boolean,
     onAutoRefreshChange: (Boolean) -> Unit,
+    reminderEnabled: Boolean,
+    reminderHour: Int,
+    reminderMinute: Int,
+    notificationsBlocked: Boolean,
+    onReminderEnabledChange: (Boolean) -> Unit,
+    onReminderTimeChange: (Int, Int) -> Unit,
     onSave: (String) -> Unit,
     onMetricSettingChange: (MetricOption, Boolean) -> Unit
 ) {
@@ -541,6 +615,42 @@ private fun SettingsScreen(
                         checked = autoRefreshEnabled,
                         onCheckedChange = onAutoRefreshChange
                     )
+                    SettingToggleRow(
+                        label = "Daily reminder",
+                        description = "Get a daily notification with your progress.",
+                        checked = reminderEnabled,
+                        onCheckedChange = onReminderEnabledChange
+                    )
+                    if (notificationsBlocked) {
+                        Text(
+                            text = "Notifications are turned off. Enable them for " +
+                                "TimeTracker in your system settings to get reminders.",
+                            modifier = Modifier.padding(start = 4.dp, end = 2.dp, top = 2.dp),
+                            color = MaterialTheme.colorScheme.error,
+                            fontSize = 13.sp,
+                            lineHeight = 17.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    if (reminderEnabled) {
+                        var showTimePicker by remember { mutableStateOf(false) }
+                        ReminderTimeRow(
+                            hour = reminderHour,
+                            minute = reminderMinute,
+                            onClick = { showTimePicker = true }
+                        )
+                        if (showTimePicker) {
+                            ReminderTimePickerDialog(
+                                initialHour = reminderHour,
+                                initialMinute = reminderMinute,
+                                onConfirm = { hour, minute ->
+                                    onReminderTimeChange(hour, minute)
+                                    showTimePicker = false
+                                },
+                                onDismiss = { showTimePicker = false }
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -646,6 +756,75 @@ private fun SettingToggleRow(
         )
     }
 }
+
+@Composable
+private fun ReminderTimeRow(
+    hour: Int,
+    minute: Int,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(start = 4.dp, top = 4.dp, end = 2.dp, bottom = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = "Reminder time",
+            color = MaterialTheme.colorScheme.onSurface,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+        Text(
+            text = formatReminderTime(hour, minute),
+            color = MaterialTheme.colorScheme.primary,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ReminderTimePickerDialog(
+    initialHour: Int,
+    initialMinute: Int,
+    onConfirm: (Int, Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val state = rememberTimePickerState(
+        initialHour = initialHour,
+        initialMinute = initialMinute
+    )
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = { onConfirm(state.hour, state.minute) }) {
+                Text("OK")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                TimePicker(state = state)
+            }
+        }
+    )
+}
+
+private fun formatReminderTime(hour: Int, minute: Int): String =
+    LocalTime.of(hour.coerceIn(0, 23), minute.coerceIn(0, 59))
+        .format(DateTimeFormatter.ofPattern("h:mm a", Locale.getDefault()))
 
 @Composable
 private fun ProgressSummary(

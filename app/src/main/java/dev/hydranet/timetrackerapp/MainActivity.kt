@@ -943,18 +943,84 @@ private fun checkHealth(url: String) {
 
     try {
         val body = connection.readBody()
-        if (connection.responseCode !in 200..299) {
-            throw HealthCheckException("Server health check returned HTTP ${connection.responseCode}.")
+        val statusCode = connection.responseCode
+        if (statusCode !in 200..299) {
+            throw HealthCheckException(
+                buildHealthCheckError(
+                    url = url,
+                    statusCode = statusCode,
+                    body = body
+                )
+            )
         }
-        if (!JSONObject(body).optBoolean("ok", false)) {
-            throw HealthCheckException("Server health check did not return ok.")
+        val isOk = runCatching { JSONObject(body).optBoolean("ok", false) }
+            .getOrElse { exception ->
+                throw HealthCheckException(
+                    buildHealthCheckError(
+                        url = url,
+                        statusCode = statusCode,
+                        body = body,
+                        reason = "Server health response was not valid JSON: ${exception.message}"
+                    ),
+                    exception
+                )
+            }
+        if (!isOk) {
+            throw HealthCheckException(
+                buildHealthCheckError(
+                    url = url,
+                    statusCode = statusCode,
+                    body = body,
+                    reason = "Server health response did not return ok."
+                )
+            )
         }
     } catch (exception: HealthCheckException) {
         throw exception
     } catch (exception: Exception) {
-        throw HealthCheckException(exception.message ?: "Server health check failed.", exception)
+        throw HealthCheckException(
+            buildString {
+                append("Server health check failed.")
+                append("\n\nURL: ")
+                append(url)
+                append("\nError: ")
+                append(exception::class.java.simpleName)
+                exception.message?.let {
+                    append(": ")
+                    append(it)
+                }
+            },
+            exception
+        )
     } finally {
         connection.disconnect()
+    }
+}
+
+private fun buildHealthCheckError(
+    url: String,
+    statusCode: Int,
+    body: String,
+    reason: String = "Server health check returned HTTP $statusCode."
+): String = buildString {
+    append(reason)
+    append("\n\nURL: ")
+    append(url)
+    append("\nHTTP status: ")
+    append(statusCode)
+    append("\n\nResponse body:\n")
+    append(body.toErrorBodyPreview())
+}
+
+private fun String.toErrorBodyPreview(): String {
+    val trimmed = trim()
+    if (trimmed.isEmpty()) {
+        return "(empty response body)"
+    }
+    return if (trimmed.length <= ERROR_BODY_PREVIEW_LIMIT) {
+        trimmed
+    } else {
+        trimmed.take(ERROR_BODY_PREVIEW_LIMIT) + "\n\n... response body truncated ..."
     }
 }
 
@@ -1135,6 +1201,7 @@ internal data class Progress(
 }
 
 private const val MILLIS_PER_DAY = 1000.0 * 60.0 * 60.0 * 24.0
+private const val ERROR_BODY_PREVIEW_LIMIT = 6_000
 
 private val percentFormatter: NumberFormat = NumberFormat.getNumberInstance().apply {
     minimumFractionDigits = 2

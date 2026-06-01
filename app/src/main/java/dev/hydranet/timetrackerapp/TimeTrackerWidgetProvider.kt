@@ -104,9 +104,26 @@ private fun TimeTrackerWidgetContent() {
         }
         Box(
             modifier = GlanceModifier.fillMaxSize(),
-            contentAlignment = Alignment.TopEnd
+            contentAlignment = Alignment.TopStart
         ) {
-            RefreshButton()
+            Row(
+                modifier = GlanceModifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Top
+            ) {
+                Text(
+                    text = context.getString(R.string.widget_name),
+                    modifier = GlanceModifier
+                        .defaultWeight()
+                        .padding(start = 6.dp, top = 3.dp),
+                    style = TextStyle(
+                        color = GlanceTheme.colors.onSurfaceVariant,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold
+                    ),
+                    maxLines = 1
+                )
+                RefreshButton()
+            }
         }
     }
 }

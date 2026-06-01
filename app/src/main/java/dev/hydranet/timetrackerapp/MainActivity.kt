@@ -246,7 +246,7 @@ private fun TrackerDashboard(
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 20.dp, top = 28.dp, end = 20.dp, bottom = 112.dp),
+            contentPadding = PaddingValues(start = 20.dp, top = 28.dp, end = 20.dp, bottom = 132.dp),
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
             item {
@@ -713,8 +713,8 @@ private fun TodoPanel(
         shape = RoundedCornerShape(22.dp)
     ) {
         Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -725,7 +725,7 @@ private fun TodoPanel(
                     text = "Key things to do",
                     color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.ExtraBold,
-                    fontSize = 25.sp
+                    fontSize = 23.sp
                 )
                 Surface(
                     color = appInsetColor(),
@@ -733,10 +733,10 @@ private fun TodoPanel(
                 ) {
                     Text(
                         text = "$completedCount/${todos.size} done",
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                        modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp),
                         color = MaterialTheme.colorScheme.onSurface,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp
+                        fontSize = 14.sp
                     )
                 }
             }
@@ -744,12 +744,11 @@ private fun TodoPanel(
                 progress = { todoProgress },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(8.dp)
+                    .height(7.dp)
                     .clip(CircleShape),
                 color = accent,
                 trackColor = appTrackColor()
             )
-            HorizontalDivider()
             if (todos.isEmpty()) {
                 Text(
                     text = "No todos yet.",
@@ -757,7 +756,7 @@ private fun TodoPanel(
                     modifier = Modifier.padding(vertical = 14.dp)
                 )
             } else {
-                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     todos.forEach { todo ->
                         TodoRow(todo = todo)
                     }
@@ -775,13 +774,13 @@ private fun TodoRow(todo: Todo) {
         shape = RoundedCornerShape(16.dp)
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 18.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Checkbox(
                 checked = todo.done,
                 onCheckedChange = null,
-                modifier = Modifier.size(44.dp)
+                modifier = Modifier.size(40.dp)
             )
             Text(
                 text = todo.title,
@@ -794,8 +793,8 @@ private fun TodoRow(todo: Todo) {
                     MaterialTheme.colorScheme.onSurface
                 },
                 fontWeight = FontWeight.SemiBold,
-                fontSize = 21.sp,
-                lineHeight = 26.sp,
+                fontSize = 19.sp,
+                lineHeight = 23.sp,
                 textDecoration = if (todo.done) TextDecoration.LineThrough else null,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis

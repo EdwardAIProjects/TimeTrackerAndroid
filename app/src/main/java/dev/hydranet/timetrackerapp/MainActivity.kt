@@ -168,7 +168,6 @@ private fun TimeTrackerApp() {
                 SettingsScreen(
                     serverUrl = serverConfig.webBaseUrl,
                     metricSettings = metricSettings,
-                    onBack = { isSettingsOpen = false },
                     onSave = { nextUrl ->
                         val normalizedUrl = nextUrl.toServerConfig().webBaseUrl
                         preferences.edit().putString(SERVER_URL_KEY, normalizedUrl).apply()
@@ -376,10 +375,12 @@ private fun Header(
 @Composable
 private fun HeaderTextButton(
     text: String,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    enabled: Boolean = true
 ) {
     TextButton(
         onClick = onClick,
+        enabled = enabled,
         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
     ) {
         Text(
@@ -419,7 +420,6 @@ private fun appTrackColor(): Color =
 private fun SettingsScreen(
     serverUrl: String,
     metricSettings: MetricSettings,
-    onBack: () -> Unit,
     onSave: (String) -> Unit,
     onMetricSettingChange: (MetricOption, Boolean) -> Unit
 ) {
@@ -444,7 +444,11 @@ private fun SettingsScreen(
                     lineHeight = 38.sp,
                     fontWeight = FontWeight.ExtraBold
                 )
-                HeaderTextButton(text = "Done", onClick = onBack)
+                HeaderTextButton(
+                    text = "Save",
+                    onClick = { onSave(draftUrl) },
+                    enabled = parsedConfig != null
+                )
             }
         }
 
@@ -488,18 +492,6 @@ private fun SettingsScreen(
                         fontSize = 14.sp,
                         lineHeight = 18.sp
                     )
-                    Button(
-                        enabled = parsedConfig != null,
-                        onClick = { onSave(draftUrl) },
-                        modifier = Modifier.fillMaxWidth(),
-                        contentPadding = PaddingValues(16.dp)
-                    ) {
-                        Text(
-                            text = "Save server URL",
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
                 }
             }
         }

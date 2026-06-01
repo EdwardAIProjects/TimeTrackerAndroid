@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.background
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -56,6 +57,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
@@ -320,6 +322,9 @@ private fun Header(
     accent: Color,
     onOpenSettings: () -> Unit
 ) {
+    val density = LocalDensity.current
+    var titleWidth by remember { mutableStateOf(0.dp) }
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -335,24 +340,27 @@ private fun Header(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            Text(
-                text = "Time Tracker",
-                color = MaterialTheme.colorScheme.onBackground,
-                fontSize = 36.sp,
-                lineHeight = 37.sp,
-                fontWeight = FontWeight.ExtraBold,
-                maxLines = 1,
-                overflow = TextOverflow.Clip
-            )
-            Surface(
-                modifier = Modifier
-                    .padding(top = 7.dp)
-                    .width(232.dp)
-                    .height(5.dp),
-                color = accent,
-                shape = CircleShape,
-                content = {}
-            )
+            Column {
+                Text(
+                    text = "Time Tracker",
+                    color = MaterialTheme.colorScheme.onBackground,
+                    fontSize = 36.sp,
+                    lineHeight = 37.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Clip,
+                    onTextLayout = { layoutResult ->
+                        titleWidth = with(density) { layoutResult.size.width.toDp() }
+                    }
+                )
+                Box(
+                    modifier = Modifier
+                        .padding(top = 7.dp)
+                        .width(titleWidth)
+                        .height(5.dp)
+                        .background(accent)
+                )
+            }
         }
 
         Column(

@@ -84,6 +84,7 @@ import java.text.NumberFormat
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -347,6 +348,12 @@ private fun TrackerDashboard(
                 )
             }
 
+            if (tracker.event.showDateTimeBanner) {
+                item {
+                    DateTimeBanner()
+                }
+            }
+
             item {
                 ProgressSummary(
                     eventName = tracker.event.name,
@@ -458,6 +465,30 @@ private fun Header(
             HeaderTextButton(text = "Settings", onClick = onOpenSettings)
         }
     }
+}
+
+@Composable
+private fun DateTimeBanner() {
+    var now by remember { mutableStateOf(LocalDateTime.now()) }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            now = LocalDateTime.now()
+            delay(1_000)
+        }
+    }
+
+    val formatted = remember(now) { now.format(dateTimeBannerFormatter) }
+
+    Text(
+        text = "Today is $formatted",
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.onBackground,
+        fontSize = 20.sp,
+        lineHeight = 26.sp,
+        fontWeight = FontWeight.SemiBold,
+        textAlign = TextAlign.Center
+    )
 }
 
 @Composable
@@ -1390,6 +1421,7 @@ private fun fetchEvents(url: String): List<EventSummary> {
                     id = item.optString("id", "event-$index"),
                     name = item.optString("name", "Event"),
                     accentColor = item.optString("accentColor", "#6750A4"),
+                    showDateTimeBanner = item.optBoolean("showDateTimeBanner", false),
                     startDate = item.optString("startDate", "2026-06-01").toLocalDateOrDefault(),
                     endDate = item.optString("endDate", "2026-08-14").toLocalDateOrDefault()
                 )
@@ -1541,6 +1573,7 @@ internal data class EventSummary(
     val id: String,
     val name: String,
     val accentColor: String,
+    val showDateTimeBanner: Boolean,
     val startDate: LocalDate,
     val endDate: LocalDate
 )
@@ -1659,6 +1692,9 @@ private val oneDecimalFormatter: NumberFormat = NumberFormat.getNumberInstance()
     maximumFractionDigits = 1
 }
 
+private val dateTimeBannerFormatter: DateTimeFormatter =
+    DateTimeFormatter.ofPattern("EEEE, MMMM d\n'at' h:mm:ss a", Locale.getDefault())
+
 @Preview(showBackground = true)
 @Composable
 private fun TrackerDashboardPreview() {
@@ -1669,6 +1705,7 @@ private fun TrackerDashboardPreview() {
                     id = "main",
                     name = "Summer internship",
                     accentColor = "#f4b400",
+                    showDateTimeBanner = true,
                     startDate = LocalDate.of(2026, 5, 11),
                     endDate = LocalDate.of(2026, 8, 28)
                 ),

@@ -2,6 +2,8 @@
 
 Android client for the [TimeTracker](https://github.com/EdwardAIProjects/TimeTracker) web app.
 
+![TimeTracker App Demo Screenshot](demo.png)
+
 ## Features
 
 - Configurable server URL

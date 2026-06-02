@@ -1,0 +1,114 @@
+name: Build APKs
+
+on:
+  push:
+    branches: [main, master]
+    tags: ["v*"]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build APKs
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: sdkmanager --install "platforms;android-36.1" "build-tools;36.1.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x ./gradlew
+
+      - name: Restore release keystore
+        if: github.event_name != 'pull_request'
+        env:
+          TIMETRACKERAPP_KEYSTORE_BASE64: ${{ secrets.TIMETRACKERAPP_KEYSTORE_BASE64 }}
+          TIMETRACKERAPP_KEYSTORE_PASSWORD: ${{ secrets.TIMETRACKERAPP_KEYSTORE_PASSWORD }}
+          TIMETRACKERAPP_KEY_ALIAS: ${{ secrets.TIMETRACKERAPP_KEY_ALIAS }}
+          TIMETRACKERAPP_KEY_PASSWORD: ${{ secrets.TIMETRACKERAPP_KEY_PASSWORD }}
+        run: |
+          if [ -z "$TIMETRACKERAPP_KEYSTORE_BASE64" ] || [ -z "$TIMETRACKERAPP_KEYSTORE_PASSWORD" ] || [ -z "$TIMETRACKERAPP_KEY_ALIAS" ] || [ -z "$TIMETRACKERAPP_KEY_PASSWORD" ]; then
+            echo "::error::Missing one or more release signing secrets."
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/keystores"
+          echo "$TIMETRACKERAPP_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/keystores/timetrackerapp-release.jks"
+
+      - name: Run unit tests
+        run: ./gradlew :app:testDebugUnitTest
+
+      - name: Build debug APK
+        run: ./gradlew :app:assembleDebug
+
+      - name: Build signed release APK
+        if: github.event_name != 'pull_request'
+        env:
+          TIMETRACKERAPP_KEYSTORE_FILE: ${{ runner.temp }}/keystores/timetrackerapp-release.jks
+          TIMETRACKERAPP_KEYSTORE_PASSWORD: ${{ secrets.TIMETRACKERAPP_KEYSTORE_PASSWORD }}
+          TIMETRACKERAPP_KEY_ALIAS: ${{ secrets.TIMETRACKERAPP_KEY_ALIAS }}
+          TIMETRACKERAPP_KEY_PASSWORD: ${{ secrets.TIMETRACKERAPP_KEY_PASSWORD }}
+        run: ./gradlew :app:assembleRelease
+
+      - name: Stage APKs
+        run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/debug/app-debug.apk dist/timetrackerapp-debug-latest.apk
+          if [ -f app/build/outputs/apk/release/app-release.apk ]; then
+            cp app/build/outputs/apk/release/app-release.apk dist/timetrackerapp-release-latest.apk
+          fi
+
+      - name: Upload latest APK artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: timetrackerapp-latest-apks
+          path: dist/*.apk
+          if-no-files-found: error
+
+  publish-latest:
+    name: Publish Latest APKs
+    runs-on: ubuntu-24.04
+    needs: build
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents: write
+    concurrency:
+      group: latest-apk-release
+      cancel-in-progress: false
+
+    steps:
+      - name: Download APK artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: timetrackerapp-latest-apks
+          path: dist
+
+      - name: Publish latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes || true
+          gh api --method DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/latest" || true
+          gh release create latest dist/*.apk \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Latest Build" \
+            --notes "Installable debug and signed release APKs for $GITHUB_SHA." \
+            --latest

@@ -15,3 +15,8 @@
 local.properties
 
 .idea/
+*.jks
+*.jks.base64
+*.keystore
+*.keystore.base64
+signing/

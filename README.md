@@ -2,7 +2,7 @@
 
 Android client for the [TimeTracker](https://github.com/EdwardAIProjects/TimeTracker) web app.
 
-![TimeTracker App Demo Screenshot](demo.png)
+<img src="demo.png" alt="TimeTracker App Demo Screenshot" width="300">
 
 ## Features
 

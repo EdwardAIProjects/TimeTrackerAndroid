@@ -141,6 +141,9 @@ private fun TimeTrackerApp() {
     var reminderMinute by remember {
         mutableIntStateOf(preferences.getInt(DAILY_REMINDER_MINUTE_KEY, DEFAULT_REMINDER_MINUTE))
     }
+    var progressNotificationEnabled by remember {
+        mutableStateOf(preferences.getBoolean(PROGRESS_NOTIFICATION_ENABLED_KEY, false))
+    }
     var notificationsBlocked by remember { mutableStateOf(false) }
 
     fun enableReminder() {
@@ -150,11 +153,27 @@ private fun TimeTrackerApp() {
         DailyReminder.schedule(context, reminderHour, reminderMinute)
     }
 
+    fun enableProgressNotification() {
+        progressNotificationEnabled = true
+        notificationsBlocked = false
+        preferences.edit().putBoolean(PROGRESS_NOTIFICATION_ENABLED_KEY, true).apply()
+        ProgressNotification.enable(context)
+    }
+
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         if (granted) {
             enableReminder()
+        } else {
+            notificationsBlocked = true
+        }
+    }
+    val progressNotificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            enableProgressNotification()
         } else {
             notificationsBlocked = true
         }
@@ -182,7 +201,10 @@ private fun TimeTrackerApp() {
         }
         uiState = runCatching { fetchTrackerState(serverConfig.apiBaseUrl) }
             .fold(
-                onSuccess = TrackerUiState::Ready,
+                onSuccess = { tracker ->
+                    ProgressNotification.onTrackerLoaded(context, tracker)
+                    TrackerUiState.Ready(tracker)
+                },
                 onFailure = {
                     if (it is HealthCheckException) {
                         if (hasBootedBefore) {
@@ -227,6 +249,29 @@ private fun TimeTrackerApp() {
                     reminderEnabled = reminderEnabled,
                     reminderHour = reminderHour,
                     reminderMinute = reminderMinute,
+                    progressNotificationEnabled = progressNotificationEnabled,
+                    onProgressNotificationEnabledChange = { enabled ->
+                        if (enabled) {
+                            val granted = ContextCompat.checkSelfPermission(
+                                context,
+                                Manifest.permission.POST_NOTIFICATIONS
+                            ) == PackageManager.PERMISSION_GRANTED
+                            if (granted) {
+                                enableProgressNotification()
+                            } else {
+                                progressNotificationPermissionLauncher.launch(
+                                    Manifest.permission.POST_NOTIFICATIONS
+                                )
+                            }
+                        } else {
+                            progressNotificationEnabled = false
+                            notificationsBlocked = false
+                            preferences.edit()
+                                .putBoolean(PROGRESS_NOTIFICATION_ENABLED_KEY, false)
+                                .apply()
+                            ProgressNotification.disable(context)
+                        }
+                    },
                     notificationsBlocked = notificationsBlocked,
                     onReminderEnabledChange = { enabled ->
                         if (enabled) {
@@ -544,6 +589,8 @@ private fun SettingsScreen(
     reminderEnabled: Boolean,
     reminderHour: Int,
     reminderMinute: Int,
+    progressNotificationEnabled: Boolean,
+    onProgressNotificationEnabledChange: (Boolean) -> Unit,
     notificationsBlocked: Boolean,
     onReminderEnabledChange: (Boolean) -> Unit,
     onReminderTimeChange: (Int, Int) -> Unit,
@@ -651,6 +698,13 @@ private fun SettingsScreen(
                         description = "Get a daily notification with your progress.",
                         checked = reminderEnabled,
                         onCheckedChange = onReminderEnabledChange
+                    )
+                    SettingToggleRow(
+                        label = "Persistent notification",
+                        description = "Keep an ongoing notification with your live " +
+                            "percentage and progress bar.",
+                        checked = progressNotificationEnabled,
+                        onCheckedChange = onProgressNotificationEnabledChange
                     )
                     if (notificationsBlocked) {
                         Text(

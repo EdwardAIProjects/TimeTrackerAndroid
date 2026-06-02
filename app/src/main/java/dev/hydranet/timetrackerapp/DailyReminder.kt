@@ -112,8 +112,8 @@ private suspend fun buildReminderMessage(context: Context): String {
     val progress = tracker.event.progressAt(Instant.now())
     val greeting = greetingForHour(ZonedDateTime.now(ZoneId.systemDefault()).hour)
     return "$greeting! You are ${progress.elapsedDays}/${progress.totalDays} days " +
-        "(${progress.percent.percentString()}%) the way through your ${tracker.event.name}. " +
-        "Let's check on the current progress."
+        "(${progress.percent.percentString()}%) the way through your ${tracker.event.name}! " +
+        "Here's your daily progress check-in."
 }
 
 private fun greetingForHour(hour: Int): String =

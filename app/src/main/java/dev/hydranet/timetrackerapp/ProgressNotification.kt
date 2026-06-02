@@ -176,7 +176,7 @@ private fun postProgressNotification(context: Context, event: EventSummary) {
     )
 
     val builder = NotificationCompat.Builder(context, PROGRESS_CHANNEL_ID)
-        .setSmallIcon(R.drawable.ic_refresh)
+        .setSmallIcon(R.drawable.ic_tt)
         .setContentTitle("$percentText% through ${event.name}")
         .setContentText(
             "${progress.elapsedDays}/${progress.totalDays} days · ${progress.daysLeft} days left"

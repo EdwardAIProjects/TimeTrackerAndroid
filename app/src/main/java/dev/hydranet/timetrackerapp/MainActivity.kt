@@ -1368,11 +1368,34 @@ private fun HealthUnavailableScreen(
 }
 
 internal suspend fun fetchTrackerState(apiBaseUrl: String): TrackerState = withContext(Dispatchers.IO) {
-    checkHealth("$apiBaseUrl/health")
-    val events = fetchEvents("$apiBaseUrl/events")
-    val todos = fetchTodos("$apiBaseUrl/todos")
-    val event = events.firstOrNull() ?: throw IOException("The API did not return an event.")
-    TrackerState(event = event, todos = todos)
+    retryOnNetworkError {
+        checkHealth("$apiBaseUrl/health")
+        val events = fetchEvents("$apiBaseUrl/events")
+        val todos = fetchTodos("$apiBaseUrl/todos")
+        val event = events.firstOrNull() ?: throw IOException("The API did not return an event.")
+        TrackerState(event = event, todos = todos)
+    }
+}
+
+/**
+ * Runs [block], retrying a few times with a short backoff when it fails with a connection-level
+ * error. This smooths over transient hiccups — a brief loss of connectivity, or DNS failing
+ * because the radio just woke from idle — so a single blip no longer surfaces as a hard error
+ * to the user. Genuine failures (bad URL, server down) still surface after the attempts run out.
+ */
+private suspend fun <T> retryOnNetworkError(block: () -> T): T {
+    var lastError: IOException? = null
+    repeat(NETWORK_RETRY_ATTEMPTS) { attempt ->
+        try {
+            return block()
+        } catch (exception: IOException) {
+            lastError = exception
+            if (attempt < NETWORK_RETRY_ATTEMPTS - 1) {
+                delay(NETWORK_RETRY_DELAYS_MS[attempt])
+            }
+        }
+    }
+    throw lastError ?: IOException("Network request failed.")
 }
 
 private fun checkHealth(url: String) {
@@ -1736,6 +1759,11 @@ private fun SharedPreferences.loadMetricSettings(): MetricSettings =
 private const val MILLIS_PER_DAY = 1000.0 * 60.0 * 60.0 * 24.0
 private const val MILLIS_PER_HOUR = 1000.0 * 60.0 * 60.0
 private const val ERROR_BODY_PREVIEW_LIMIT = 6_000
+
+// Total number of attempts (1 initial + retries) and the backoff before each retry.
+// The delays array must have NETWORK_RETRY_ATTEMPTS - 1 entries.
+private const val NETWORK_RETRY_ATTEMPTS = 3
+private val NETWORK_RETRY_DELAYS_MS = longArrayOf(500L, 1_500L)
 
 private val percentFormatter: NumberFormat = NumberFormat.getNumberInstance().apply {
     minimumFractionDigits = 2

@@ -202,6 +202,8 @@ private fun TimeTrackerApp() {
         uiState = runCatching { fetchTrackerState(serverConfig.apiBaseUrl) }
             .fold(
                 onSuccess = { tracker ->
+                    preferences.cacheTrackerEvent(tracker.event)
+                    refreshTimeTrackerWidgetsFromCachedEvent(context.applicationContext)
                     ProgressNotification.onTrackerLoaded(context, tracker)
                     TrackerUiState.Ready(tracker)
                 },

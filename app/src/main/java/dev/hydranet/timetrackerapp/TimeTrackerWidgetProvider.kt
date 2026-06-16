@@ -1,6 +1,13 @@
 package dev.hydranet.timetrackerapp
 
+import android.annotation.SuppressLint
+import android.app.AlarmManager
+import android.app.PendingIntent
+import android.appwidget.AppWidgetManager
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.SharedPreferences
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -48,6 +55,7 @@ import androidx.glance.text.Text
 import androidx.glance.text.TextAlign
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
+import java.io.IOException
 import java.time.Instant
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -55,13 +63,33 @@ import kotlinx.coroutines.launch
 
 class TimeTrackerWidgetProvider : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = TimeTrackerWidget()
+
+    override fun onEnabled(context: Context) {
+        super.onEnabled(context)
+        TimeTrackerWidgetUpdater.start(context)
+    }
+
+    override fun onDisabled(context: Context) {
+        super.onDisabled(context)
+        TimeTrackerWidgetUpdater.stop(context)
+    }
+
+    override fun onUpdate(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetIds: IntArray
+    ) {
+        TimeTrackerWidgetUpdater.start(context)
+        refreshTimeTrackerWidgets(context, WidgetFetchPolicy.NetworkIfStale)
+        super.onUpdate(context, appWidgetManager, appWidgetIds)
+    }
 }
 
 private class TimeTrackerWidget : GlanceAppWidget() {
     override val sizeMode: SizeMode = SizeMode.Exact
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        refreshWidgetState(context, id)
+        refreshWidgetState(context, id, WidgetFetchPolicy.CacheOnly)
 
         provideContent {
             GlanceTheme(colors = widgetColors) {
@@ -230,10 +258,117 @@ private fun RefreshButton() {
     }
 }
 
-internal fun refreshTimeTrackerWidgets(context: Context) {
-    CoroutineScope(Dispatchers.Default).launch {
+internal fun refreshTimeTrackerWidgets(
+    context: Context,
+    fetchPolicy: WidgetFetchPolicy = WidgetFetchPolicy.ForceNetwork
+) {
+    CoroutineScope(Dispatchers.IO).launch {
+        refreshTimeTrackerWidgetsNow(context.applicationContext, fetchPolicy)
+    }
+}
+
+private suspend fun refreshTimeTrackerWidgetsNow(
+    context: Context,
+    fetchPolicy: WidgetFetchPolicy
+): Boolean {
+    val manager = GlanceAppWidgetManager(context)
+    val glanceIds = manager.getGlanceIds(TimeTrackerWidget::class.java)
+    glanceIds.forEach { glanceId ->
+        refreshWidgetState(context, glanceId, fetchPolicy)
+        TimeTrackerWidget().update(context, glanceId)
+    }
+    return glanceIds.isNotEmpty()
+}
+
+internal enum class WidgetFetchPolicy {
+    CacheOnly,
+    NetworkIfStale,
+    ForceNetwork
+}
+
+private object TimeTrackerWidgetUpdater {
+    private const val WIDGET_UPDATE_INTERVAL_MS = 15 * 60 * 1000L
+    private const val WIDGET_UPDATE_REQUEST_CODE = 2003
+
+    fun start(context: Context) {
+        val appContext = context.applicationContext
+        schedule(appContext)
+        refreshTimeTrackerWidgets(appContext, WidgetFetchPolicy.NetworkIfStale)
+    }
+
+    fun stop(context: Context) {
+        val alarmManager = context.getSystemService(AlarmManager::class.java) ?: return
+        alarmManager.cancel(updatePendingIntent(context))
+    }
+
+    fun schedule(context: Context) {
+        val alarmManager = context.getSystemService(AlarmManager::class.java) ?: return
+        alarmManager.setAndAllowWhileIdle(
+            AlarmManager.RTC_WAKEUP,
+            System.currentTimeMillis() + WIDGET_UPDATE_INTERVAL_MS,
+            updatePendingIntent(context)
+        )
+    }
+
+    private fun updatePendingIntent(context: Context): PendingIntent {
+        val intent = Intent(context, TimeTrackerWidgetUpdateReceiver::class.java)
+        return PendingIntent.getBroadcast(
+            context,
+            WIDGET_UPDATE_REQUEST_CODE,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+    }
+}
+
+class TimeTrackerWidgetUpdateReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        val appContext = context.applicationContext
+        val pendingResult = goAsync()
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val hasWidgets = refreshTimeTrackerWidgetsNow(
+                    appContext,
+                    WidgetFetchPolicy.NetworkIfStale
+                )
+                if (hasWidgets) {
+                    TimeTrackerWidgetUpdater.schedule(appContext)
+                } else {
+                    TimeTrackerWidgetUpdater.stop(appContext)
+                }
+            } finally {
+                pendingResult.finish()
+            }
+        }
+    }
+}
+
+class TimeTrackerWidgetBootReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action != Intent.ACTION_BOOT_COMPLETED) {
+            return
+        }
+
+        val appContext = context.applicationContext
+        val pendingResult = goAsync()
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val manager = GlanceAppWidgetManager(appContext)
+                if (manager.getGlanceIds(TimeTrackerWidget::class.java).isNotEmpty()) {
+                    TimeTrackerWidgetUpdater.start(appContext)
+                }
+            } finally {
+                pendingResult.finish()
+            }
+        }
+    }
+}
+
+internal fun refreshTimeTrackerWidgetsFromCachedEvent(context: Context) {
+    CoroutineScope(Dispatchers.IO).launch {
         val manager = GlanceAppWidgetManager(context)
         manager.getGlanceIds(TimeTrackerWidget::class.java).forEach { glanceId ->
+            refreshWidgetState(context, glanceId, WidgetFetchPolicy.CacheOnly)
             TimeTrackerWidget().update(context, glanceId)
         }
     }
@@ -245,13 +380,17 @@ class RefreshTimeTrackerWidgetAction : ActionCallback {
         glanceId: GlanceId,
         parameters: ActionParameters
     ) {
-        refreshWidgetState(context, glanceId)
+        refreshWidgetState(context, glanceId, WidgetFetchPolicy.ForceNetwork)
         TimeTrackerWidget().update(context, glanceId)
     }
 }
 
-private suspend fun refreshWidgetState(context: Context, glanceId: GlanceId) {
-    val result = runCatching { fetchWidgetSnapshot(context) }
+private suspend fun refreshWidgetState(
+    context: Context,
+    glanceId: GlanceId,
+    fetchPolicy: WidgetFetchPolicy
+) {
+    val result = runCatching { fetchWidgetSnapshot(context, fetchPolicy) }
     updateAppWidgetState(context, glanceId) { preferences ->
         result.fold(
             onSuccess = { snapshot ->
@@ -293,20 +432,43 @@ private fun Preferences.toWidgetSnapshot(): WidgetSnapshot? {
     )
 }
 
-private suspend fun fetchWidgetSnapshot(context: Context): WidgetSnapshot {
+private suspend fun fetchWidgetSnapshot(
+    context: Context,
+    fetchPolicy: WidgetFetchPolicy
+): WidgetSnapshot {
     val preferences = context.getSharedPreferences(SETTINGS_NAME, Context.MODE_PRIVATE)
-    val serverUrl = preferences.getString(SERVER_URL_KEY, DEFAULT_WEB_BASE_URL) ?: DEFAULT_WEB_BASE_URL
-    val serverConfig = serverUrl.toServerConfig()
-    val tracker = fetchTrackerState(serverConfig.apiBaseUrl)
-    val progress = tracker.event.progressAt(Instant.now())
+    val event = resolveWidgetEvent(context, preferences, fetchPolicy)
+    val progress = event.progressAt(Instant.now())
 
     return WidgetSnapshot(
-        eventName = tracker.event.name,
+        eventName = event.name,
         percentText = progress.percent.percentString(),
         percentFraction = progress.percentFraction,
-        accentColor = tracker.event.accentColor,
+        accentColor = event.accentColor,
         dateRange = "${progress.start.formatDisplayDate()} to ${progress.end.formatDisplayDate()}"
     )
+}
+
+private suspend fun resolveWidgetEvent(
+    context: Context,
+    preferences: SharedPreferences,
+    fetchPolicy: WidgetFetchPolicy
+): EventSummary {
+    val cached = preferences.cachedTrackerEvent()
+    val shouldFetch = when (fetchPolicy) {
+        WidgetFetchPolicy.CacheOnly -> false
+        WidgetFetchPolicy.NetworkIfStale -> cached == null || preferences.isCachedTrackerEventStale()
+        WidgetFetchPolicy.ForceNetwork -> true
+    }
+
+    if (!shouldFetch) {
+        return cached ?: throw IOException("No cached tracker data yet.")
+    }
+
+    return runCatching { fetchAndCacheTrackerEvent(context) }
+        .getOrElse { throwable ->
+            cached ?: throw throwable
+        }
 }
 
 private data class WidgetSnapshot(
@@ -330,6 +492,7 @@ private object WidgetStateKeys {
 private fun String.toWidgetColorProvider(): ColorProvider? =
     runCatching { ColorProvider(Color(android.graphics.Color.parseColor(this))) }.getOrNull()
 
+@SuppressLint("RestrictedApi")
 private val widgetColors = colorProviders(
     primary = ColorProvider(R.color.widget_accent),
     onPrimary = ColorProvider(R.color.widget_background),

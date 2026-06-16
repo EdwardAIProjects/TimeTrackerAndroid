@@ -30,6 +30,18 @@
         </receiver>
 
         <receiver
+            android:name=".TimeTrackerWidgetUpdateReceiver"
+            android:exported="false" />
+
+        <receiver
+            android:name=".TimeTrackerWidgetBootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
             android:name=".DailyReminderReceiver"
             android:exported="false" />
 

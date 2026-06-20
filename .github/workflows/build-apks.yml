@@ -112,3 +112,42 @@ jobs:
             --title "Latest Build" \
             --notes "Installable debug and signed release APKs for $GITHUB_SHA." \
             --latest
+
+  publish-apk-repository:
+    name: Publish to APK Repository
+    runs-on: ubuntu-24.04
+    needs: build
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents: read
+    concurrency:
+      group: apk-repository-${{ github.ref }}
+      cancel-in-progress: false
+
+    steps:
+      - name: Download APK artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: timetrackerapp-latest-apks
+          path: dist
+
+      - name: Upload release APK to APK Repository
+        env:
+          APK_REPOSITORY_URL: ${{ secrets.APK_REPOSITORY_URL }}
+          APK_REPOSITORY_API_KEY: ${{ secrets.APK_REPOSITORY_API_KEY }}
+        run: |
+          if [ -z "$APK_REPOSITORY_URL" ]; then
+            echo "::error::Missing APK_REPOSITORY_URL repository secret."
+            exit 1
+          fi
+          if [ -z "$APK_REPOSITORY_API_KEY" ]; then
+            echo "::error::Missing APK_REPOSITORY_API_KEY repository secret."
+            exit 1
+          fi
+          apk="$(find dist -name '*release*.apk' -print -quit)"
+          test -n "$apk"
+          curl --fail-with-body \
+            -H "Authorization: Bearer ${APK_REPOSITORY_API_KEY}" \
+            -F "apk=@${apk};type=application/vnd.android.package-archive" \
+            -F 'metadata={"release_channel":"release"}' \
+            "${APK_REPOSITORY_URL}/api/v1/upload"
